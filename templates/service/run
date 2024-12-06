@@ -1,0 +1,6 @@
+#!/bin/bash
+
+export RUST_LOG={log_level}
+
+# Start the service
+exec /usr/local/bin/{service_name}
