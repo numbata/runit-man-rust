@@ -27,12 +27,42 @@ impl LogInfo {
         }
     }
 
+    pub fn is_running(&self) -> bool {
+        self.status == "run"
+    }
+
+    // Return the log file path if service is running
+    pub fn log_directory(&self) -> Option<String> {
+        if !self.is_running() {
+            return None;
+        }
+
+        // Let's check if the command under the /proc/<pid>/cmdline is the same as the service name
+        let cmdline = std::fs::read_to_string(format!("/proc/{}/comm", self.pid.unwrap()));
+        if cmdline.unwrap() == *"svlogd" {
+            return None;
+        }
+
+        self.svlogd_log_directory()
+    }
+
+    pub fn svlogd_log_directory(&self) -> Option<String> {
+        let log_file = format!("/proc/{}/cmdline", self.pid.unwrap());
+        let cmdline = std::fs::read_to_string(log_file);
+
+        match cmdline {
+            Ok(cmdline) => Some(cmdline.split('\0').filter(|s| !s.is_empty()).last().unwrap().to_string()),
+            Err(_) => None,
+        }
+    }
+
     pub fn as_json(&self) -> serde_json::Value {
         serde_json::json!({
             "name": self.name,
             "status": self.status,
             "pid": self.pid,
             "uptime": self.uptime,
+            "directory": self.log_directory(),
         })
     }
 }
@@ -50,7 +80,7 @@ impl ServiceInfo {
     }
 
     pub fn is_running(&self) -> bool {
-        self.status == "up"
+        self.status == "run"
     }
 
     // Method to serialize into JSON format
@@ -92,18 +122,19 @@ impl ServiceInfo {
                     let log_uptime = captures.name("log_uptime").map(|m| m.as_str().parse::<u64>().unwrap());
                     let log_name = captures.name("log_name").map(|m| m.as_str().to_string());
 
+                    let log = log_name.map(|log_name| LogInfo::new(
+                        log_name,
+                        log_status.unwrap(),
+                        log_pid,
+                        log_uptime,
+                    ));
 
                     Ok(ServiceInfo::new(
                         name.to_string(),
                         status.unwrap(),
                         pid,
                         uptime,
-                        log_name.map(|log_name| LogInfo::new(
-                            log_name,
-                            log_status.unwrap(),
-                            log_pid,
-                            log_uptime,
-                        )),
+                        log,
                     ))
                 } else {
                     warn!("Service is not running: {}", name);
