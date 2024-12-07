@@ -2,31 +2,67 @@ use std::process::Command;
 use std::error::Error;
 use log::{info, error, warn};
 
-pub struct ServiceInfo {
+pub struct LogInfo {
     pub name: String,
-    pub is_running: bool,
+    pub status: String,
     pub pid: Option<u32>,
     pub uptime: Option<u64>,
 }
 
-impl ServiceInfo {
-    // Constructor for creating a new ServiceInfo
-    pub fn new(name: String, is_running: bool, pid: Option<u32>, uptime: Option<u64>) -> Self {
+pub struct ServiceInfo {
+    pub name: String,
+    pub status: String,
+    pub pid: Option<u32>,
+    pub uptime: Option<u64>,
+    pub log: Option<LogInfo>,
+}
+
+impl LogInfo {
+    pub fn new(name: String, status: String, pid: Option<u32>, uptime: Option<u64>) -> Self {
         Self {
             name,
-            is_running,
+            status,
             pid,
             uptime,
         }
     }
 
-    // Method to serialize into JSON format
     pub fn as_json(&self) -> serde_json::Value {
         serde_json::json!({
             "name": self.name,
-            "is_running": self.is_running,
+            "status": self.status,
             "pid": self.pid,
             "uptime": self.uptime,
+        })
+    }
+}
+
+impl ServiceInfo {
+    // Constructor for creating a new ServiceInfo
+    pub fn new(name: String, status: String, pid: Option<u32>, uptime: Option<u64>, log: Option<LogInfo>) -> Self {
+        Self {
+            name,
+            status,
+            pid,
+            uptime,
+            log,
+        }
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.status == "up"
+    }
+
+    // Method to serialize into JSON format
+    pub fn as_json(&self) -> serde_json::Value {
+        info!("Exposing service info: {}", self.name);
+        serde_json::json!({
+            "name": self.name,
+            "is_running": self.is_running(),
+            "status": self.status,
+            "pid": self.pid,
+            "uptime": self.uptime,
+            "log": self.log.as_ref().map(|log| log.as_json()),
         })
     }
 
@@ -44,16 +80,34 @@ impl ServiceInfo {
                     let output_str = String::from_utf8_lossy(&output.stdout);
                     info!("Service status fetched successfully: {}", output_str);
 
-                    let pid = output_str.split_whitespace().find(|part| part.starts_with("(pid"))
-                        .and_then(|pid_str| pid_str.trim_matches(&['(', ')', 'p', 'i', 'd'][..]).parse::<u32>().ok());
+                    let name = regex::escape(name);
+                    let re = regex::Regex::new(&format!(r"(?<status>[^\:]+): {}: \(pid (?<pid>\d+)\) (?<uptime>\d+)s;?(?:\ (?<log_status>[^\:]+): (?<log_name>[^:]+): \(pid (?<log_pid>\d+)\) (?<log_uptime>\d+)s)?", name)).unwrap();
+                    let captures = re.captures(&output_str).unwrap();
 
-                    let uptime = output_str.split_whitespace().find(|part| part.ends_with("s"))
-                        .and_then(|uptime_str| uptime_str.trim_end_matches("s").parse::<u64>().ok());
+                    let status = captures.name("status").map(|m| m.as_str().to_string());
+                    let pid = captures.name("pid").map(|m| m.as_str().parse::<u32>().unwrap());
+                    let uptime = captures.name("uptime").map(|m| m.as_str().parse::<u64>().unwrap());
+                    let log_pid = captures.name("log_pid").map(|m| m.as_str().parse::<u32>().unwrap());
+                    let log_status = captures.name("log_status").map(|m| m.as_str().to_string());
+                    let log_uptime = captures.name("log_uptime").map(|m| m.as_str().parse::<u64>().unwrap());
+                    let log_name = captures.name("log_name").map(|m| m.as_str().to_string());
 
-                    Ok(ServiceInfo::new(name.to_string(), true, pid, uptime))
+
+                    Ok(ServiceInfo::new(
+                        name.to_string(),
+                        status.unwrap(),
+                        pid,
+                        uptime,
+                        log_name.map(|log_name| LogInfo::new(
+                            log_name,
+                            log_status.unwrap(),
+                            log_pid,
+                            log_uptime,
+                        )),
+                    ))
                 } else {
                     warn!("Service is not running: {}", name);
-                    Ok(ServiceInfo::new(name.to_string(), false, None, None))
+                    Ok(ServiceInfo::new(name.to_string(), "down".to_string(), None, None, None))
                 }
             }
             Err(e) => {

@@ -54,6 +54,8 @@ pub fn install_service(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     if !std::path::Path::new(&args.log_directory).exists() {
         fs::create_dir_all(&args.log_directory)
             .map_err(|e| format!("Failed to create log directory: {}", e))?;
+        fs::set_permissions(&args.log_directory, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("Failed to set permissions on {}: {}", args.log_directory, e))?;
     }
 
     let service_dir = format!("/etc/sv/{}", &args.service_name);
