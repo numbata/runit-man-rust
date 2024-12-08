@@ -1,7 +1,9 @@
 use std::process::Command;
 use std::error::Error;
+use serde::Serialize;
 use log::{info, error, warn};
 
+#[derive(Serialize)]
 pub struct LogInfo {
     pub name: String,
     pub status: String,
@@ -9,6 +11,7 @@ pub struct LogInfo {
     pub uptime: Option<u64>,
 }
 
+#[derive(Serialize)]
 pub struct ServiceInfo {
     pub name: String,
     pub status: String,
@@ -110,24 +113,25 @@ impl ServiceInfo {
                     let output_str = String::from_utf8_lossy(&output.stdout);
                     info!("Service status fetched successfully: {}", output_str);
 
-                    let name = regex::escape(name);
-                    let re = regex::Regex::new(&format!(r"(?<status>[^\:]+): {}: \(pid (?<pid>\d+)\) (?<uptime>\d+)s;?(?:\ (?<log_status>[^\:]+): (?<log_name>[^:]+): \(pid (?<log_pid>\d+)\) (?<log_uptime>\d+)s)?", name)).unwrap();
+                    let re = regex::Regex::new(
+                        &format!(
+                            r"(?<status>[^\:]+): {}:(?: \(pid (?<pid>\d+)\))? (?<uptime>\d+)s;?(?:\ (?<log_status>[^\:]+): (?<log_name>[^:]+):(?: \(pid (?<log_pid>\d+)\)) (?<log_uptime>\d+)s)?",
+                            regex::escape(name)
+                        )
+                    )?;
                     let captures = re.captures(&output_str).unwrap();
 
                     let status = captures.name("status").map(|m| m.as_str().to_string());
                     let pid = captures.name("pid").map(|m| m.as_str().parse::<u32>().unwrap());
                     let uptime = captures.name("uptime").map(|m| m.as_str().parse::<u64>().unwrap());
-                    let log_pid = captures.name("log_pid").map(|m| m.as_str().parse::<u32>().unwrap());
-                    let log_status = captures.name("log_status").map(|m| m.as_str().to_string());
-                    let log_uptime = captures.name("log_uptime").map(|m| m.as_str().parse::<u64>().unwrap());
-                    let log_name = captures.name("log_name").map(|m| m.as_str().to_string());
-
-                    let log = log_name.map(|log_name| LogInfo::new(
-                        log_name,
-                        log_status.unwrap(),
-                        log_pid,
-                        log_uptime,
-                    ));
+                    let log = captures.name("log_name").map(|log_name| {
+                        LogInfo::new(
+                            log_name.as_str().to_string(),
+                            captures["log_status"].to_string(),
+                            captures.name("log_pid").and_then(|m| m.as_str().parse::<u32>().ok()),
+                            captures.name("log_uptime").and_then(|m| m.as_str().parse::<u64>().ok()),
+                        )
+                    });
 
                     Ok(ServiceInfo::new(
                         name.to_string(),

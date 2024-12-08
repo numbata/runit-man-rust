@@ -3,13 +3,11 @@
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::os::unix::fs::PermissionsExt;
-use include_dir::{include_dir, Dir};
 use std::env;
 use tinytemplate::TinyTemplate;
 use std::collections::HashMap;
 use crate::Args;
-
-static SCRIPTS_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates/service");
+use crate::TEMPLATES_DIR;
 
 fn is_binary_in_path(binary_name: &str) -> bool {
     if let Some(paths) = env::var_os("PATH") {
@@ -70,16 +68,16 @@ pub fn install_service(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     let mut tt = TinyTemplate::new();
     tt.add_template(
         "run",
-        SCRIPTS_DIR
-            .get_file("run")
+        TEMPLATES_DIR
+            .get_file("service/run")
             .expect("Missing run script")
             .contents_utf8()
             .unwrap(),
     )?;
     tt.add_template(
         "log_run",
-        SCRIPTS_DIR
-            .get_file("log_run")
+        TEMPLATES_DIR
+            .get_file("service/log_run")
             .expect("Missing log run script")
             .contents_utf8()
             .unwrap(),

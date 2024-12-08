@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { margin-bottom: 20px; }
+        #updated-time { margin-bottom: 10px; font-size: 14px; color: #555; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 0; padding: 10px; text-align: left; }
+        td { border-top: 1px solid #ddd; }
+        th { background-color: #f4f4f4; }
+        .status-run { color: green; font-weight: bold; }
+        .status-inactive { color: red; font-weight: bold; }
+        button { padding: 5px 10px; cursor: pointer; border: none; border-radius: 5px; background: #f0f0f0; }
+        button:hover { background-color: #ddd; }
+        .log-link { color: blue; text-decoration: underline; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Service list</h1>
+    <div id="updated-time">Updated at: --</div>
+    <table id="services-table">
+        <thead>
+            <tr>
+                <th>PID</th>
+                <th>Name</th>
+                <th>Started at</th>
+                <th>Uptime (s)</th>
+                <th>Status</th>
+                <th>Actions</th>
+                <th>Log file</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Rows will be dynamically added here -->
+        </tbody>
+    </table>
+    <script>
+        const tableBody = document.querySelector('#services-table tbody');
+
+        async function fetchServices() {
+            try {
+                const response = await fetch('/api/services');
+                const services = await response.json();
+
+                services.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+                tableBody.innerHTML = '';
+                const currentTime = Date.now();
+
+                services.forEach(service => {
+                    const startedAt = new Date(currentTime - service.uptime * 1000)
+                        .toLocaleString('en-GB', { timeZone: 'UTC', hour12: false })
+                        .replace(',', '') + ' UTC';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${service.pid}</td>
+                        <td>${service.name}</td>
+                        <td>${startedAt}</td>
+                        <td>${service.uptime}</td>
+                        <td class="${service.status === 'run' ? 'status-run' : 'status-inactive'}">${service.status}</td>
+                        <td class="buttons">
+                            <button onclick="manageService('${service.name}', 'start')">Start</button>
+                            <button onclick="manageService('${service.name}', 'stop')">Stop</button>
+                            <button onclick="manageService('${service.name}', 'restart')">Restart</button>
+                            <button onclick="manageService('${service.name}', 'enable')">Enable</button>
+                            <button onclick="manageService('${service.name}', 'disable')">Disable</button>
+                        </td>
+                        <td>
+                            ${service.log ? `<a href="/services/${encodeURIComponent(service.name)}/log" class="log-link">Logs</a>` : '&mdash;'}
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+                // Update the "Updated at" time
+                const updatedTime = new Date().toISOString();
+                document.querySelector('#updated-time').textContent = `Updated at: ${updatedTime}`;
+            } catch (error) {
+                console.error('Failed to fetch services:', error);
+            }
+        }
+
+        async function manageService(serviceName, action) {
+            try {
+                const response = await fetch(`/api/services/${encodeURIComponent(serviceName)}/${action}`, { method: 'POST' });
+                const result = await response.text();
+                alert(result);
+                fetchServices(); // Refresh the service list
+            } catch (error) {
+                console.error('Failed to manage service:', error);
+                alert('Failed to perform action.');
+            }
+        }
+
+        // Fetch and refresh the service list every 5 seconds
+        fetchServices();
+        setInterval(fetchServices, 5000);
+    </script>
+</body>
+</html>

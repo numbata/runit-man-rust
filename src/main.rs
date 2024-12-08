@@ -2,8 +2,13 @@ use actix_web::{web, App, HttpServer};
 use actix_web_httpauth::middleware::HttpAuthentication;
 use actix_web_httpauth::extractors::basic::BasicAuth;
 use actix_web::dev::ServiceRequest;
+use actix_web::HttpResponse;
+use anyhow::{Context, Result};
+use tera::Tera;
+use include_dir::{include_dir, Dir, DirEntry};
 use config::AppConfig;
 use env_logger::{Builder, Target};
+use log::info;
 use clap::Parser;
 
 mod services;
@@ -12,6 +17,17 @@ mod service_logs;
 mod service_info;
 mod config;
 mod installer;
+mod web_ui;
+
+static TEMPLATES_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
+
+async fn favicon() -> HttpResponse {
+    let favicon_bytes = include_bytes!("../static/favicon.ico");
+    HttpResponse::Ok()
+        .content_type("image/x-icon")
+        .body(&favicon_bytes[..])
+}
+
 
 /// Program to install a service with runit
 #[derive(Parser, Debug)]
@@ -75,6 +91,32 @@ async fn basic_auth_validator(
     Err((actix_web::error::ErrorUnauthorized("Invalid username or password"), req))
 }
 
+fn load_embedded_templates() -> Result<Tera> {
+    let mut tera = Tera::default();
+
+    info!("Finding templates");
+    for entry in TEMPLATES_DIR.find("**/*.html")? {
+        match entry {
+            DirEntry::File(file) => {
+                let name = file.path().to_str()
+                    .context("Invalid template path encoding")?;
+
+                println!("Loading template: {}", name);
+
+                if let Some(content) = file.contents_utf8() {
+                    tera.add_raw_template(name, content)
+                        .context(format!("Failed to add template: {}", name))?;
+                } else {
+                    eprintln!("Skipping non-UTF8 template: {}", file.path().display());
+                }
+            },
+            DirEntry::Dir(_) => continue,
+        }
+    }
+
+    Ok(tera)
+}
+
 fn handle_installation(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     installer::install_service(args)
 }
@@ -98,23 +140,36 @@ async fn main() -> std::io::Result<()> {
         password: args.password,
         services_dir: args.services_dir,
     };
-    // Set up logging to STDOUT
+
     Builder::new()
         .target(Target::Stdout) // Direct output to stdout
         .filter_level(args.log_level.parse().expect("Invalid log level"))
         .init();
+    info!("Finding templates");
+    for entry in TEMPLATES_DIR.files() {
+        info!("Found file: {}", entry.path().display());
+    }
+    info!("Finding templates");
+
+
+    info!("CARGO_MANIFEST_DIR: {}", env!("CARGO_MANIFEST_DIR"));
 
     HttpServer::new(move || {
         let auth = HttpAuthentication::basic(basic_auth_validator);
+        info!("Load templates");
+        let tera = load_embedded_templates();
 
         App::new()
             .app_data(web::Data::new(config.clone()))
+            .app_data(web::Data::new(tera.unwrap().clone()))
             .wrap(auth) // Always wrap, validator handles bypass if no credentials
-            .route("/", web::get().to(|| async { "Hello, runit-man!" }))
-            .route("/services", web::get().to(services::list_services))
-            .route("/services/{name}", web::get().to(manage_service::get_service_info))
-            .route("/services/{name}/{action}", web::post().to(manage_service::manage_service))
-            .route("/services/{name}/log", web::get().to(service_logs::service_logs))
+            .route("/", web::get().to(web_ui::render_service_list))
+            .route("/favicon.ico", web::get().to(favicon))
+            .route("/services/{name}/log", web::get().to(web_ui::render_service_log))
+            .route("/api/services", web::get().to(services::list_services))
+            .route("/api/services/{name}", web::get().to(manage_service::get_service_info))
+            .route("/api/services/{name}/{action}", web::post().to(manage_service::manage_service))
+            .route("/api/services/{name}/log", web::get().to(service_logs::service_logs))
     })
     .bind("0.0.0.0:8080")?
     .run()

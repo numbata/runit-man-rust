@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Logs</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { margin-bottom: 10px; }
+        #updated-time { margin-bottom: 10px; font-size: 14px; color: #555; }
+        #log-content {
+            white-space: pre-wrap;
+            font-family: monospace;
+            background: #f4f4f4;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: scroll;
+        }
+        .lines-toggle {
+            margin-bottom: 10px;
+        }
+        .lines-toggle button {
+            padding: 5px 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #f0f0f0;
+            margin-right: 5px;
+        }
+        .lines-toggle button:hover {
+            background-color: #ddd;
+        }
+        .lines-toggle button.active {
+            background-color: #007bff;
+            color: white;
+        }
+        #reload-button, #auto-reload-button {
+            padding: 5px 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #f0f0f0;
+        }
+        #reload-button:hover, #auto-reload-button:hover {
+            background-color: #ddd;
+        }
+        .navigation {
+            margin-top: 20px;
+        }
+        .navigation a {
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .navigation a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="navigation">
+        <a href="/">← Back to Services</a>
+    </div>
+    <h1>Logs for Service: {{ service.name }}</h1>
+    <div id="updated-time">Updated at: --</div>
+    <div class="lines-toggle">
+        <span>Show:</span>
+        <button onclick="setLines(100)">100</button>
+        <button onclick="setLines(250)">250</button>
+        <button onclick="setLines(500)">500</button>
+        <button onclick="setLines(1000)">1000</button>
+        <button onclick="setLines(5000)">5000</button>
+    </div>
+    <button id="reload-button" onclick="reloadLogs()">Reload</button>
+    <button id="auto-reload-button" onclick="toggleAutoReload()">Auto-Reload: <span id="auto-reload-status">Off</span></button>
+    <div id="log-content">Loading logs...</div>
+
+    <script>
+        const serviceName = "{{ service.name }}"; // Use Jinja2 template variable
+        const logContent = document.querySelector('#log-content');
+        const updatedTime = document.querySelector('#updated-time');
+        const lineButtons = document.querySelectorAll('.lines-toggle button');
+        const autoReloadButton = document.querySelector('#auto-reload-button');
+        const autoReloadStatus = document.querySelector('#auto-reload-status');
+        let selectedLines = 100; // Default number of lines
+        let autoReload = false;
+        let autoReloadInterval;
+
+        // Highlight the selected button
+        function highlightSelectedButton(lines) {
+            lineButtons.forEach(button => {
+                button.classList.toggle('active', button.textContent === String(lines));
+            });
+        }
+
+        // Set the number of lines and fetch logs
+        function setLines(lines) {
+            selectedLines = lines;
+            highlightSelectedButton(lines);
+            fetchLogs();
+        }
+
+        async function fetchLogs() {
+            try {
+                if (!serviceName) {
+                    logContent.textContent = 'No service specified.';
+                    return;
+                }
+
+                const response = await fetch(`/api/services/${encodeURIComponent(serviceName)}/log?lines=${selectedLines}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch logs. Server responded with ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                logContent.textContent = data.logs || 'No logs available.';
+                updatedTime.textContent = `Updated at: ${new Date().toISOString()}`;
+
+                // Auto-scroll to the bottom
+                logContent.scrollTop = logContent.scrollHeight;
+            } catch (error) {
+                console.error('Failed to fetch logs:', error);
+                logContent.textContent = 'Failed to load logs.';
+            }
+        }
+
+        function reloadLogs() {
+            fetchLogs();
+        }
+
+        function toggleAutoReload() {
+            autoReload = !autoReload;
+            autoReloadStatus.textContent = autoReload ? 'On' : 'Off';
+
+            if (autoReload) {
+                autoReloadInterval = setInterval(fetchLogs, 5000); // Reload every 5 seconds
+            } else {
+                clearInterval(autoReloadInterval);
+            }
+        }
+
+        // Initial setup
+        highlightSelectedButton(selectedLines);
+        fetchLogs();
+    </script>
+</body>
+</html>

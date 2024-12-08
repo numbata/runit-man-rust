@@ -3,12 +3,13 @@ use std::io::{BufReader, Seek, SeekFrom, Read};
 use std::fs::File;
 use log::info;
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::service_info::ServiceInfo;
 
 #[derive(Debug, Deserialize)]
 pub struct LogQuery {
-    lines: usize,
+    lines: Option<usize>,
 }
 
 fn read_chunk(reader: &mut BufReader<File>, position: i64, size: i64) -> std::io::Result<Vec<u8>> {
@@ -74,15 +75,11 @@ pub async fn service_logs(path: web::Path<String>, query: web::Query<LogQuery>) 
     let log_path = service_info.log.unwrap().log_directory().unwrap();
     let current_log_path = format!("{}/current", log_path);
 
-    let lines = match query.lines {
-        0 => 10,
-        n => n,
-    };
+    let lines = query.lines.unwrap_or(50);
 
-    info!("Preparing for reading last {} lines from log file {}", lines, log_path);
-
+    info!("Preparing for reading last {} lines from log file {}", lines, current_log_path);
     match read_last_lines(&current_log_path, lines) {
-        Ok(logs) => HttpResponse::Ok().body(logs),
-        Err(_) => HttpResponse::NotFound().body(format!("Could not read logs for service {}", service_name)),
+        Ok(logs) => HttpResponse::Ok().json(json!({ "logs": logs })),
+        Err(_) => HttpResponse::NotFound().json(json!({ "error": format!("Could not read logs for service {}", service_name) })),
     }
 }
