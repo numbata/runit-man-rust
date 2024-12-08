@@ -7,6 +7,8 @@ use serde_json::json;
 
 use crate::service_info::ServiceInfo;
 
+static CHUNK_SIZE: i64 = 1024;
+
 #[derive(Debug, Deserialize)]
 pub struct LogQuery {
     lines: Option<usize>,
@@ -23,24 +25,22 @@ fn read_last_lines(file_path: &str, num_lines: usize) -> std::io::Result<String>
     let file = File::open(file_path)?;
     let mut reader = BufReader::new(file);
     let file_size = reader.seek(SeekFrom::End(0))?;
-    let chunk_size= 1024;
     let mut position = file_size as i64;
     // Create a string to hold a result lines as a string
     let mut lines = String::new();
     let mut found_lines = 0;
 
     while found_lines < num_lines {
-        if position == 0 { break; }
-        position -= chunk_size;
+        if position <= 0 { break; }
+        position -= CHUNK_SIZE;
 
         // Read the chunk
         let chunk = match position < 0 {
             true => {
-                position = 0;
-                read_chunk(&mut reader, position, -position)?
+                read_chunk(&mut reader, 0, -position)?
             },
             false => {
-                read_chunk(&mut reader, position, chunk_size)?
+                read_chunk(&mut reader, position, CHUNK_SIZE)?
             }
         };
 
@@ -50,6 +50,7 @@ fn read_last_lines(file_path: &str, num_lines: usize) -> std::io::Result<String>
 
         if found_lines > num_lines {
             let over_lines = found_lines - num_lines;
+            info!("Found {} lines in the chunk, over by {}", num_lines_in_chunk, over_lines);
             // Skip the first over_lines lines and join the rest
             let l = String::from_utf8(chunk).unwrap().lines().skip(over_lines).collect::<Vec<&str>>().join("\n");
 
