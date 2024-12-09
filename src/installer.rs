@@ -88,6 +88,9 @@ pub fn install_service(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
     context.insert("log_directory", args.log_directory.clone());
     context.insert("services_dir", args.services_dir.clone());
     context.insert("log_level", args.log_level.clone());
+    context.insert("bind", args.bind.clone());
+    context.insert("username", args.username.clone().unwrap_or_default());
+    context.insert("password", args.password.clone().unwrap_or_default());
 
     let rendered_run_script = tt.render("run", &context)?;
     let rendered_log_run_script = tt.render("log_run", &context)?;

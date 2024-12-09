@@ -1,6 +1,29 @@
 #!/bin/bash
 
 export RUST_LOG={log_level}
+APP_BIND={bind}
+USERNAME={username}
+PASSWORD={password}
 
 # Start the service
-exec /usr/local/bin/{service_name}
+ARGS=""
+
+if [ -n "$APP_BIND" ]; then
+    ARGS="$ARGS --bind $APP_BIND"
+fi
+
+if [ -n "$RUST_LOG" ]; then
+    ARGS="$ARGS --log-level $RUST_LOG"
+fi
+
+if [ -n "$USERNAME" ]; then
+    ARGS="$ARGS --username $USERNAME"
+fi
+
+if [ -n "$PASSWORD" ]; then
+    ARGS="$ARGS --password $PASSWORD"
+fi
+
+echo "Starting service with args: $ARGS"
+
+exec /usr/local/bin/{service_name} $ARGS

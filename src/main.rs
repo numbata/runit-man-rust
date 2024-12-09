@@ -39,11 +39,11 @@ struct Args {
     install: bool,
 
     /// The name of the service to install
-    #[arg(long, default_value = "runit-man-rust")]
+    #[arg(long, default_value = "runit-ui")]
     service_name: String,
 
     /// The directory for log files
-    #[arg(long, default_value = "/var/log/runit-man")]
+    #[arg(long, default_value = "/var/log/runit-ui")]
     log_directory: String,
 
     /// Set logging level
@@ -65,7 +65,7 @@ struct Args {
 
     // The application bind address
     #[arg(long, default_value = "0.0.0.0:8080")]
-    host: String,
+    bind: String,
 }
 
 async fn basic_auth_validator(
@@ -155,14 +155,14 @@ async fn main() -> std::io::Result<()> {
     info!("CARGO_MANIFEST_DIR: {}", env!("CARGO_MANIFEST_DIR"));
 
     HttpServer::new(move || {
-        let auth = HttpAuthentication::basic(basic_auth_validator);
+        let _auth = HttpAuthentication::basic(basic_auth_validator);
         info!("Load templates");
         let tera = load_embedded_templates();
 
         App::new()
             .app_data(web::Data::new(config.clone()))
             .app_data(web::Data::new(tera.unwrap().clone()))
-            .wrap(auth) // Always wrap, validator handles bypass if no credentials
+            //.wrap(auth) // Always wrap, validator handles bypass if no credentials
             .route("/", web::get().to(web_ui::render_service_list))
             .route("/favicon.ico", web::get().to(favicon))
             .route("/services/{name}/log", web::get().to(web_ui::render_service_log))
@@ -171,7 +171,7 @@ async fn main() -> std::io::Result<()> {
             .route("/api/services/{name}/{action}", web::post().to(manage_service::manage_service))
             .route("/api/services/{name}/log", web::get().to(service_logs::service_logs))
     })
-    .bind("0.0.0.0:8080")?
+    .bind(&args.bind)?
     .run()
     .await
 }

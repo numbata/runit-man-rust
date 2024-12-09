@@ -34,7 +34,14 @@ fn execute_command(command: &mut Command) -> Result<Output, io::Error> {
     if output.status.success() {
         Ok(output)
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "Command execution failed"))
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Command execution failed: {:?} with status: {}",
+                command,
+                output.status
+            ),
+        ))
     }
 }
 
