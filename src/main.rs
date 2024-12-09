@@ -145,23 +145,16 @@ async fn main() -> std::io::Result<()> {
         .target(Target::Stdout) // Direct output to stdout
         .filter_level(args.log_level.parse().expect("Invalid log level"))
         .init();
-    info!("Finding templates");
-    for entry in TEMPLATES_DIR.files() {
-        info!("Found file: {}", entry.path().display());
-    }
-    info!("Finding templates");
 
-
-    info!("CARGO_MANIFEST_DIR: {}", env!("CARGO_MANIFEST_DIR"));
+    let tera = load_embedded_templates().expect("Failed to load templates");
 
     HttpServer::new(move || {
         let _auth = HttpAuthentication::basic(basic_auth_validator);
         info!("Load templates");
-        let tera = load_embedded_templates();
 
         App::new()
             .app_data(web::Data::new(config.clone()))
-            .app_data(web::Data::new(tera.unwrap().clone()))
+            .app_data(web::Data::new(tera.clone()))
             //.wrap(auth) // Always wrap, validator handles bypass if no credentials
             .route("/", web::get().to(web_ui::render_service_list))
             .route("/favicon.ico", web::get().to(favicon))
