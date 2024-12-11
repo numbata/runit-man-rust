@@ -1,6 +1,5 @@
 use actix_web::{web, HttpResponse};
 use actix_web::Responder;
-use log::info;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -27,7 +26,6 @@ pub async fn render_service_list(config: web::Data<AppConfig>) -> impl Responder
     let services_dir = &config.services_dir;
     let service_list = service::fetch_service_list(services_dir);
     let json_response = json!(service_list.iter().map(|s| s.as_json()).collect::<Vec<_>>());
-    info!("JSON builded: {}", json_response);
     HttpResponse::Ok().json(json_response)
 }
 

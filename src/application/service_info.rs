@@ -1,7 +1,7 @@
 use std::process::Command;
 use std::error::Error;
 use serde::Serialize;
-use log::{info, error, warn};
+use log::{error, warn};
 
 #[derive(Serialize)]
 pub struct LogInfo {
@@ -109,7 +109,6 @@ impl ServiceInfo {
 
     // Method to serialize into JSON format
     pub fn as_json(&self) -> serde_json::Value {
-        info!("Exposing service info: {}", self.name);
         serde_json::json!({
             "name": self.name,
             "is_running": self.is_running(),
@@ -121,8 +120,6 @@ impl ServiceInfo {
     }
 
     pub fn get_status(name: &str) -> Result<Self, Box<dyn Error>> {
-        info!("Fetching status for service: {}", name);
-
         let output = Command::new("sv")
             .arg("status")
             .arg(name)
@@ -134,21 +131,13 @@ impl ServiceInfo {
 
         if output.status.success() {
             let output_str = String::from_utf8_lossy(&output.stdout);
-            info!("Service status fetched successfully: {}", output_str);
-
             let re = regex::Regex::new(
                 &format!(
                     r"(?<status>[^:]+): {}:(?: \(pid (?<pid>\d+)\))? (?<uptime>\d+)s(?:, [^;]+)?(?:; (?<log_status>[^:]+): (?<log_name>[^:]+):(?: \(pid (?<log_pid>\d+)\))? (?<log_uptime>\d+)s)?",
                     regex::escape(name)
                 ),
             )?;
-            info!("Regex: {}", re);
-
-            let captures = re.captures(&output_str).ok_or_else(|| {
-                log::warn!("Regex did not match output: {}", output_str);
-                "Regex capture failed"
-            })?;
-
+            let captures = re.captures(&output_str).ok_or("Regex capture failed")?;
             let status = captures.name("status").map(|m| m.as_str().to_string());
             let pid = captures.name("pid").map(|m| m.as_str().parse::<u32>().unwrap());
             let uptime = captures.name("uptime").map(|m| m.as_str().parse::<u64>().unwrap());
