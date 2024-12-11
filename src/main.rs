@@ -6,20 +6,18 @@ use actix_web::HttpResponse;
 use anyhow::{Context, Result};
 use tera::Tera;
 use include_dir::{include_dir, Dir, DirEntry};
-use config::AppConfig;
 use env_logger::{Builder, Target};
 use log::info;
 use clap::Parser;
 
-mod services;
-mod manage_service;
-mod service_logs;
-mod service_info;
-mod config;
-mod installer;
-mod web_ui;
+use config::app_config::AppConfig;
 
-static TEMPLATES_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/templates");
+mod application;
+mod domain;
+mod config;
+mod presentation;
+
+static TEMPLATES_DIR: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/presentation/templates");
 
 async fn favicon() -> HttpResponse {
     let favicon_bytes = include_bytes!("../static/favicon.ico");
@@ -118,7 +116,7 @@ fn load_embedded_templates() -> Result<Tera> {
 }
 
 fn handle_installation(args: &Args) -> Result<(), Box<dyn std::error::Error>> {
-    installer::install_service(args)
+    application::installer::install_service(args)
 }
 
 #[actix_web::main]
@@ -150,19 +148,18 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         let _auth = HttpAuthentication::basic(basic_auth_validator);
-        info!("Load templates");
 
         App::new()
             .app_data(web::Data::new(config.clone()))
             .app_data(web::Data::new(tera.clone()))
             //.wrap(auth) // Always wrap, validator handles bypass if no credentials
-            .route("/", web::get().to(web_ui::render_service_list))
+            .route("/", web::get().to(presentation::web_ui::render_service_list))
+            .route("/services/{name}/log", web::get().to(presentation::web_ui::render_service_log))
             .route("/favicon.ico", web::get().to(favicon))
-            .route("/services/{name}/log", web::get().to(web_ui::render_service_log))
-            .route("/api/services", web::get().to(services::list_services))
-            .route("/api/services/{name}", web::get().to(manage_service::get_service_info))
-            .route("/api/services/{name}/{action}", web::post().to(manage_service::manage_service))
-            .route("/api/services/{name}/log", web::get().to(service_logs::service_logs))
+            .route("/api/services", web::get().to(presentation::web_api::render_service_list))
+            .route("/api/services/{name}", web::get().to(presentation::web_api::render_service_info))
+            .route("/api/services/{name}/log", web::get().to(presentation::web_api::render_service_log))
+            .route("/api/services/{name}/{action}", web::post().to(presentation::web_api::manage_service))
     })
     .bind(&args.bind)?
     .run()

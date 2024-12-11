@@ -1,16 +1,10 @@
 use actix_web::{web, HttpResponse, Responder};
 use tera::{Context, Tera};
 
-use crate::services;
-use crate::service_info::ServiceInfo;
-use crate::config::AppConfig;
+use crate::application::service_info::ServiceInfo;
 
-/// Renders the service management page
-pub async fn render_service_list(config: web::Data<AppConfig>, tera: web::Data<Tera>) -> impl Responder {
-    let services = services::fetch_service_list(&config.services_dir);
-
-    let mut context = Context::new();
-    context.insert("services", &services);
+pub async fn render_service_list(tera: web::Data<Tera>) -> impl Responder {
+    let context = Context::new();
 
     match tera.render("web/index.html", &context) {
         Ok(rendered) => HttpResponse::Ok()

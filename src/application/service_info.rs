@@ -138,7 +138,7 @@ impl ServiceInfo {
 
             let re = regex::Regex::new(
                 &format!(
-                    r"(?<status>[^:]+): {}:(?: \(pid (?<pid>\d+)\))? (?<uptime>\d+)s(?:; (?<log_status>[^:]+): (?<log_name>[^:]+):(?: \(pid (?<log_pid>\d+)\))? (?<log_uptime>\d+)s)?",
+                    r"(?<status>[^:]+): {}:(?: \(pid (?<pid>\d+)\))? (?<uptime>\d+)s(?:, [^;]+)?(?:; (?<log_status>[^:]+): (?<log_name>[^:]+):(?: \(pid (?<log_pid>\d+)\))? (?<log_uptime>\d+)s)?",
                     regex::escape(name)
                 ),
             )?;
